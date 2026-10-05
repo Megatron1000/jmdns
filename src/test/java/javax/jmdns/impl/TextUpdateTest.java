@@ -208,6 +208,29 @@ class TextUpdateTest {
     }
 
     @Test
+    void testTextUpdateWhileProbing() throws IOException, InterruptedException {
+        // Issue #252: a text update before the service was announced left it unannounced for good
+
+        try (JmDNS registry = JmDNS.create("Listener");
+             JmDNS newServiceRegistry = JmDNS.create("Registry")) {
+
+            registry.addServiceListener(service.getType(), serviceListenerMock);
+
+            newServiceRegistry.registerService(service);
+            String text = "Test web server updated while probing";
+            Map<String, byte[]> properties = new HashMap<>();
+            properties.put(SERVICE_KEY, text.getBytes());
+            service.setText(properties);
+
+            assertTrue(((ServiceInfoImpl) service).waitForAnnounced(DNSConstants.SERVICE_INFO_TIMEOUT), "The service was never announced: " + service);
+            Thread.sleep(3000);
+            Optional<ServiceEvent> servicesResolved = serviceListenerMock.servicesResolved().stream()
+                    .filter(e -> text.equals(e.getInfo().getPropertyString(SERVICE_KEY))).findFirst();
+            assertTrue(servicesResolved.isPresent(), "We did not get the service with the updated text: " + serviceListenerMock);
+        }
+    }
+
+    @Test
     void testRegisterEmptyTXTField() throws IOException, InterruptedException {
 
         try (JmDNS registry = JmDNS.create("Listener");
